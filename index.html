@@ -57,18 +57,6 @@ input[type=range]{accent-color:#9e6a74}
   background:#0f1722;
   color:#dbe6f6;
 }
-.sideBtns button{
-  width:100%;
-  color:#dbe6f6;
-  background:linear-gradient(#1e2938,#18212e);
-  border:1px solid #0c121a;
-  border-top-color:#3d4c61;
-  border-left-color:#3d4c61;
-}
-.sideBtns button:active{
-  border-color:#3d4c61 #0c121a #0c121a #3d4c61;
-  background:#121a25;
-}
 
 /* Dark transport/progress slider */
 #progress{
@@ -77,21 +65,29 @@ input[type=range]{accent-color:#9e6a74}
   height:14px;
   background:transparent;
   outline:none;
+  --progressPct:0%;
 }
 #progress::-webkit-slider-runnable-track{
   height:6px;
-  background:#0f1722;
+  background:
+    linear-gradient(
+      to right,
+      #a66f79 0%,
+      #a66f79 var(--progressPct),
+      #0f1722 var(--progressPct),
+      #0f1722 100%
+    );
   border:1px solid #34465c;
 }
 #progress::-webkit-slider-thumb{
   -webkit-appearance:none;
   appearance:none;
-  width:14px;
-  height:14px;
-  margin-top:-5px;
-  border-radius:50%;
-  background:#b2747e;
-  border:1px solid #d2a2aa;
+  width:3px;
+  height:16px;
+  margin-top:-6px;
+  border-radius:0;
+  background:#d3a1aa;
+  border:0;
   box-shadow:0 0 0 1px #0b1119;
 }
 #progress::-moz-range-track{
@@ -101,15 +97,65 @@ input[type=range]{accent-color:#9e6a74}
 }
 #progress::-moz-range-progress{
   height:6px;
-  background:#263649;
+  background:#a66f79;
   border:1px solid #34465c;
 }
 #progress::-moz-range-thumb{
-  width:14px;
+  width:3px;
+  height:16px;
+  border-radius:0;
+  background:#d3a1aa;
+  border:0;
+}
+
+
+#opacity{
+  -webkit-appearance:none;
+  appearance:none;
   height:14px;
-  border-radius:50%;
-  background:#b2747e;
-  border:1px solid #d2a2aa;
+  background:transparent;
+  outline:none;
+  --opacityPct:0%;
+}
+#opacity::-webkit-slider-runnable-track{
+  height:6px;
+  background:
+    linear-gradient(
+      to right,
+      #a66f79 0%,
+      #a66f79 var(--opacityPct),
+      #0f1722 var(--opacityPct),
+      #0f1722 100%
+    );
+  border:1px solid #34465c;
+}
+#opacity::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:3px;
+  height:16px;
+  margin-top:-6px;
+  border-radius:0;
+  background:#d3a1aa;
+  border:0;
+  box-shadow:0 0 0 1px #0b1119;
+}
+#opacity::-moz-range-track{
+  height:6px;
+  background:#0f1722;
+  border:1px solid #34465c;
+}
+#opacity::-moz-range-progress{
+  height:6px;
+  background:#a66f79;
+  border:1px solid #34465c;
+}
+#opacity::-moz-range-thumb{
+  width:3px;
+  height:16px;
+  border-radius:0;
+  background:#d3a1aa;
+  border:0;
 }
 
 </style>
@@ -682,7 +728,22 @@ function niceHzStep(maxHz){
   for(const s of candidates)if(s>=raw)return s;
   return Math.ceil(raw/5000)*5000;
 }
-function draw(){const a=axes(),W=a.W,H=a.H;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0f1722';ctx.fillRect(0,0,W,H);ctx.strokeStyle='#253446';ctx.lineWidth=1;ctx.fillStyle='#9db0c7';ctx.font='10px Tahoma';const maxHz=Math.max(100,+$('maxHz').value),hzStep=niceHzStep(maxHz);for(let f=0;f<=maxHz+.001;f+=hzStep){const y=fy(f,a);ctx.beginPath();ctx.moveTo(a.L,y);ctx.lineTo(W-a.R,y);ctx.stroke();ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(String(Math.round(f)),a.L-5,y)}const span=viewEnd-viewStart,step=span<=2?.25:span<=5?.5:span<=15?1:span<=40?5:10;for(let t=Math.ceil(viewStart/step)*step;t<=viewEnd;t+=step){const x=tx(t,a);ctx.beginPath();ctx.moveTo(x,a.T);ctx.lineTo(x,H-a.B);ctx.stroke();ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(t.toFixed(step<1?2:1),x,H-a.B+5)}ctx.strokeStyle='#4a5d74';ctx.beginPath();ctx.moveTo(a.L,a.T);ctx.lineTo(a.L,H-a.B);ctx.lineTo(W-a.R,H-a.B);ctx.stroke();const minLen=Math.max(1,+$('minLen').value|0),alpha=+$('opacity').value;for(const tr of tracks){if(deleted.has(tr.id)||tr.points.length<minLen)continue;ctx.strokeStyle=selected.has(tr.id)?'#edf5ff':`rgba(201,134,144,${alpha})`;ctx.lineWidth=selected.has(tr.id)?1.95:1.05;ctx.beginPath();let begun=false;for(const p of tr.points){if(p.t<viewStart-.05||p.t>viewEnd+.05||p.f>maxHz)continue;const x=tx(p.t,a),y=fy(p.f,a);if(!begun){ctx.moveTo(x,y);begun=true}else ctx.lineTo(x,y)}if(begun)ctx.stroke()}if(playingKind){const t=currentPlayTime(),x=tx(t,a);if(t>=viewStart&&t<=viewEnd){ctx.strokeStyle='#8db3e2';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,a.T);ctx.lineTo(x,H-a.B);ctx.stroke()}}
+function updateProgressTrail(){
+  const min=Number(progress.min)||0;
+  const max=Number(progress.max)||1;
+  const val=Number(progress.value)||0;
+  const pct=max>min?Math.max(0,Math.min(100,(val-min)/(max-min)*100)):0;
+  progress.style.setProperty('--progressPct',pct+'%');
+}
+function updateOpacityTrail(){
+  const el=$('opacity');
+  const min=Number(el.min)||0;
+  const max=Number(el.max)||1;
+  const val=Number(el.value)||0;
+  const pct=max>min?Math.max(0,Math.min(100,(val-min)/(max-min)*100)):0;
+  el.style.setProperty('--opacityPct',pct+'%');
+}
+function draw(){updateProgressTrail();updateOpacityTrail();const a=axes(),W=a.W,H=a.H;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0f1722';ctx.fillRect(0,0,W,H);ctx.strokeStyle='#253446';ctx.lineWidth=1;ctx.fillStyle='#9db0c7';ctx.font='10px Tahoma';const maxHz=Math.max(100,+$('maxHz').value),hzStep=niceHzStep(maxHz);for(let f=0;f<=maxHz+.001;f+=hzStep){const y=fy(f,a);ctx.beginPath();ctx.moveTo(a.L,y);ctx.lineTo(W-a.R,y);ctx.stroke();ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(String(Math.round(f)),a.L-5,y)}const span=viewEnd-viewStart,step=span<=2?.25:span<=5?.5:span<=15?1:span<=40?5:10;for(let t=Math.ceil(viewStart/step)*step;t<=viewEnd;t+=step){const x=tx(t,a);ctx.beginPath();ctx.moveTo(x,a.T);ctx.lineTo(x,H-a.B);ctx.stroke();ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(t.toFixed(step<1?2:1),x,H-a.B+5)}ctx.strokeStyle='#4a5d74';ctx.beginPath();ctx.moveTo(a.L,a.T);ctx.lineTo(a.L,H-a.B);ctx.lineTo(W-a.R,H-a.B);ctx.stroke();const minLen=Math.max(1,+$('minLen').value|0),alpha=+$('opacity').value;for(const tr of tracks){if(deleted.has(tr.id)||tr.points.length<minLen)continue;ctx.strokeStyle=selected.has(tr.id)?'#edf5ff':`rgba(201,134,144,${alpha})`;ctx.lineWidth=selected.has(tr.id)?1.95:1.05;ctx.beginPath();let begun=false;for(const p of tr.points){if(p.t<viewStart-.05||p.t>viewEnd+.05||p.f>maxHz)continue;const x=tx(p.t,a),y=fy(p.f,a);if(!begun){ctx.moveTo(x,y);begun=true}else ctx.lineTo(x,y)}if(begun)ctx.stroke()}if(playingKind){const t=currentPlayTime(),x=tx(t,a);if(t>=viewStart&&t<=viewEnd){ctx.strokeStyle='#8db3e2';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,a.T);ctx.lineTo(x,H-a.B);ctx.stroke()}}
   if(selectRect){
     const x=Math.min(selectRect.x0,selectRect.x1),y=Math.min(selectRect.y0,selectRect.y1);
     const w=Math.abs(selectRect.x1-selectRect.x0),h=Math.abs(selectRect.y1-selectRect.y0);
@@ -708,7 +769,7 @@ function draw(){const a=axes(),W=a.W,H=a.H;ctx.clearRect(0,0,W,H);ctx.fillStyle=
     ctx.stroke();
     ctx.restore();
   }
-}$('maxHz').oninput=draw;$('minLen').oninput=draw;$('opacity').oninput=draw;
+}$('maxHz').oninput=draw;$('minLen').oninput=draw;$('opacity').oninput=()=>{updateOpacityTrail();draw()};
 function pointSegmentDistance(px,py,x1,y1,x2,y2){
   const vx=x2-x1,vy=y2-y1;
   const len2=vx*vx+vy*vy;
@@ -1150,7 +1211,10 @@ plot.addEventListener('mousedown',e=>{
     return;
   }
 
-  if(rectSelectMode){
+  // In Select-box mode, clicking ON a partial should still behave like
+  // ordinary selection / Ctrl-selection. Rectangle drawing only begins
+  // when the gesture starts away from a partial.
+  if(rectSelectMode&&!tr){
     e.preventDefault();
     drag=true;
     dragMoved=false;
