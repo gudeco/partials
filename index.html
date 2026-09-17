@@ -158,6 +158,125 @@ input[type=range]{accent-color:#9e6a74}
   border:0;
 }
 
+
+#scopePanel{
+  flex:0 0 150px;
+  min-height:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  padding:3px 7px 4px;
+  border-bottom:0;
+}
+#scopeWrap{
+  width:100%;
+  height:100%;
+  min-height:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+#scopeCanvas{
+  display:block;
+  width:min(100%,142px);
+  aspect-ratio:1/1;
+  max-height:142px;
+}
+
+
+/* Keep the right-hand control column geometrically static. */
+#side{
+  overflow:hidden;
+}
+#trackInfo{
+  height:95px;
+  min-height:95px;
+  max-height:95px;
+  overflow:auto;
+}
+#status{
+  width:300px;
+  min-width:300px;
+  max-width:300px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  text-align:right;
+}
+#scopePanel{
+  flex:1 1 120px;
+  min-height:105px;
+  max-height:none;
+  padding:3px 7px;
+}
+#scopeCanvas{
+  width:min(100%,130px);
+  max-height:130px;
+}
+#legend{
+  flex:0 0 32px;
+  min-height:32px;
+  margin-top:0;
+  padding:3px 7px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  align-items:center;
+  gap:6px;
+}
+
+
+/* V18: restore the V13 lower-right layout while keeping the oscilloscope. */
+
+/* The scope occupies only the flexible empty space that V13 used to have
+   between the Selection panel and the legend. */
+#scopePanel{
+  margin-top:auto;
+  flex:0 0 118px;
+  min-height:118px;
+  max-height:118px;
+  padding:2px 7px 3px;
+  border-bottom:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+#scopeWrap{
+  width:100%;
+  height:100%;
+  min-height:0;
+  padding:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#scopeCanvas{
+  display:block;
+  width:110px;
+  height:110px;
+  max-width:110px;
+  max-height:110px;
+}
+
+/* Restore the V13 legend appearance: two lines, one above the other. */
+#legend{
+  margin-top:0;
+  flex:0 0 auto;
+  min-height:0;
+  padding:7px;
+  font-size:10px;
+  border-top:1px solid var(--border);
+  background:#141d29;
+  color:var(--muted);
+  display:block;
+}
+#legend > div{
+  display:block;
+  line-height:14px;
+  white-space:nowrap;
+}
+
 </style>
 </head>
 <body>
@@ -172,7 +291,7 @@ input[type=range]{accent-color:#9e6a74}
     </select>
     <button id="exampleBtn">Load example</button>
     <input id="fileInput" type="file" accept="audio/*,.wav,.wave,.mp3,.mpeg,.mpga,.aiff,.aif,.m4a,.aac,.flac,.ogg" hidden><span id="fileName">—</span><div class="sep"></div>
-    <button id="analyzeBtn">Analyze</button><button id="origBtn">▶ Original</button><button id="synthBtn">▶ Partials</button><button id="stopBtn">■ Stop</button><div class="sep"></div>
+    <button id="analyzeBtn">Analyze</button><button id="origBtn">▶ Original</button><button id="synthBtn">▶ Partials</button><button id="stopBtn">■ Stop</button><button id="loopBtn" title="Loop selected partials; with no selection, loop all partials">↻ Loop</button><div class="sep"></div>
     <span class="lab">Zoom</span><button id="zoomOut">−</button><button id="zoomIn">+</button><button id="fitBtn">Fit</button><div class="sep"></div>
     <button id="rectSelectBtn" title="Drag a rectangle around partials">▭ Select box</button><button id="drawPartialBtn" title="Draw any spectral shape. Loops are automatically decomposed into simultaneous partial branches.">✎ Draw shape</button><button id="importOutlineBtn" title="Import an image and turn its visible outlines into simultaneous partial trajectories">▧ Import outline</button><input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden><button id="selectAllBtn">Select all</button><button id="clearSelBtn">Clear</button><button id="exportSelectedBtn" title="Export the currently selected partials as a WAV file">Export selected</button><span id="status">no audio</span>
   </div>
@@ -194,6 +313,9 @@ input[type=range]{accent-color:#9e6a74}
       </div>
       <div class="panel"><h3>Selected partial</h3><div id="trackInfo">none</div><div class="sideBtns" style="margin-top:6px"><button id="muteBtn">▶ Mute selected</button><button id="soloBtn">▶ Play selected</button><button id="deleteBtn">Delete</button><button id="restoreBtn">Restore all</button></div></div>
       <div class="panel"><h3>Selection</h3><div class="sideBtns"><button id="lowBtn">Lowest 20</button><button id="highBtn">Highest 20</button><button id="strongBtn">Strongest 20</button><button id="invertBtn">Invert</button></div></div>
+      <div id="scopePanel" class="panel">
+        <div id="scopeWrap"><canvas id="scopeCanvas"></canvas></div>
+      </div>
       <div id="legend"><div><span class="dot red"></span>partial</div><div><span class="dot black"></span>selected</div></div>
     </aside>
   </div>
@@ -202,7 +324,11 @@ input[type=range]{accent-color:#9e6a74}
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),plot=$('plot'),ctx=plot.getContext('2d'),holder=$('plotHolder'),fileInput=$('fileInput'),fileName=$('fileName'),status=$('status'),busy=$('busy'),progress=$('progress'),clock=$('clock');
+const scopeCanvas=$('scopeCanvas'),scopeCtx=scopeCanvas.getContext('2d');
 let audioCtx=null,buffer=null,mono=null,sampleRate=44100,duration=0,tracks=[],selected=new Set(),deleted=new Set(),muted=new Set(),solo=new Set(),viewStart=0,viewEnd=1,playStartCtx=0,playStartSec=0,playingKind=null,srcNode=null,synthNodes=[],raf=0;
+let loopEnabled=false,loopStartSec=0,loopEndSec=0;
+let lastSelectionPlaybackMode='selected';
+let scopeAnalyser=null,scopeData=null,scopeRAF=0;
 let drag=false,dragMoved=false,dragMode=null,dragX0=0,dragY0=0,dragView0=[0,1],editOriginals=null,editIds=null;
 let pendingTrackId=null,pendingTrackAdd=false;
 let rectSelectMode=false,selectRect=null,rectAdditive=false;
@@ -420,8 +546,128 @@ async function decodeAnyAudio(ab,name,type){
   }
 }
 
-const ac=()=>audioCtx||(audioCtx=new (window.AudioContext||window.webkitAudioContext)());
+function ac(){
+  if(!audioCtx){
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    scopeAnalyser=audioCtx.createAnalyser();
+    scopeAnalyser.fftSize=2048;
+    scopeAnalyser.smoothingTimeConstant=.18;
+    scopeAnalyser.connect(audioCtx.destination);
+    scopeData=new Float32Array(scopeAnalyser.fftSize);
+  }
+  return audioCtx;
+}
+function audioOut(){
+  ac();
+  return scopeAnalyser;
+}
 const fmt=t=>{t=Math.max(0,t||0);let m=Math.floor(t/60),s=t-m*60;return `${m}:${s.toFixed(3).padStart(6,'0')}`};const db=a=>20*Math.log10(Math.max(1e-12,a));const midiFromHz=f=>69+12*Math.log2(f/440);const noteName=f=>{if(!isFinite(f)||f<=0)return'—';const n=Math.round(midiFromHz(f)),pc=((n%12)+12)%12,oct=Math.floor(n/12)-1;return['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][pc]+oct};
+
+function resizeScope(){
+  const r=scopeCanvas.getBoundingClientRect();
+  const d=Math.min(2,devicePixelRatio||1);
+  const pw=Math.max(1,Math.round(r.width*d));
+  const ph=Math.max(1,Math.round(r.height*d));
+  if(scopeCanvas.width!==pw||scopeCanvas.height!==ph){
+    scopeCanvas.width=pw;
+    scopeCanvas.height=ph;
+  }
+  scopeCtx.setTransform(d,0,0,d,0,0);
+}
+function drawScope(){
+  resizeScope();
+  const r=scopeCanvas.getBoundingClientRect(),W=r.width,H=r.height;
+  if(W<2||H<2){
+    scopeRAF=requestAnimationFrame(drawScope);
+    return;
+  }
+
+  const c=scopeCtx,cx=W/2,cy=H/2,R=Math.max(10,Math.min(W,H)*.46);
+  c.clearRect(0,0,W,H);
+
+  // Circular instrument housing.
+  c.fillStyle='#080e15';
+  c.beginPath();c.arc(cx,cy,R+5,0,Math.PI*2);c.fill();
+
+  c.strokeStyle='#53687f';
+  c.lineWidth=2;
+  c.beginPath();c.arc(cx,cy,R+2,0,Math.PI*2);c.stroke();
+
+  c.strokeStyle='#29394d';
+  c.lineWidth=1;
+  c.beginPath();c.arc(cx,cy,R-4,0,Math.PI*2);c.stroke();
+
+  const face=c.createRadialGradient(cx,cy,0,cx,cy,R);
+  face.addColorStop(0,'#111b27');
+  face.addColorStop(1,'#0b141d');
+  c.fillStyle=face;
+  c.beginPath();c.arc(cx,cy,R-9,0,Math.PI*2);c.fill();
+
+  c.save();
+  c.beginPath();c.arc(cx,cy,R-10,0,Math.PI*2);c.clip();
+
+  // Scope grid: dark blue/charcoal to match the rest of the interface.
+  c.strokeStyle='rgba(83,104,127,.18)';
+  c.lineWidth=.65;
+  for(let rr=(R-10)/5;rr<R-9;rr+=(R-10)/5){
+    c.beginPath();c.arc(cx,cy,rr,0,Math.PI*2);c.stroke();
+  }
+  for(let a=0;a<Math.PI*2;a+=Math.PI/12){
+    c.beginPath();
+    c.moveTo(cx,cy);
+    c.lineTo(cx+Math.cos(a)*(R-10),cy+Math.sin(a)*(R-10));
+    c.stroke();
+  }
+
+  // Horizontal center reference.
+  c.strokeStyle='rgba(141,179,226,.18)';
+  c.beginPath();
+  c.moveTo(cx-(R-13),cy);
+  c.lineTo(cx+(R-13),cy);
+  c.stroke();
+
+  if(scopeAnalyser&&scopeData)scopeAnalyser.getFloatTimeDomainData(scopeData);
+  const data=(scopeAnalyser&&scopeData)?scopeData:null;
+
+  // Conventional oscilloscope trace: time runs left -> right and
+  // instantaneous amplitude moves vertically.
+  const xRadius=R-15;
+  const ampScale=(R-15)*.42;
+  const sampleCount=data?Math.min(640,data.length):512;
+
+  let start=0;
+  if(data){
+    // Find a rising zero crossing to make the trace less visually jumpy.
+    const searchEnd=Math.min(data.length-sampleCount-1,700);
+    for(let i=1;i<searchEnd;i++){
+      if(data[i-1]<=0&&data[i]>0){
+        start=i;
+        break;
+      }
+    }
+  }
+
+  c.strokeStyle='#b56b72';
+  c.lineWidth=1.55;
+  c.beginPath();
+
+  for(let i=0;i<sampleCount;i++){
+    const u=i/Math.max(1,sampleCount-1);
+    const x=cx-xRadius+u*xRadius*2;
+    const s=data?Math.max(-1,Math.min(1,data[Math.min(data.length-1,start+i)])):0;
+    const y=cy-s*ampScale;
+    if(i===0)c.moveTo(x,y);else c.lineTo(x,y);
+  }
+  c.stroke();
+  c.restore();
+
+  c.strokeStyle='rgba(181,107,114,.30)';
+  c.lineWidth=1;
+  c.beginPath();c.arc(cx,cy,R-10,0,Math.PI*2);c.stroke();
+
+  scopeRAF=requestAnimationFrame(drawScope);
+}
+
 function resize(){const r=holder.getBoundingClientRect(),d=Math.min(2,devicePixelRatio||1);plot.width=Math.max(1,Math.round(r.width*d));plot.height=Math.max(1,Math.round(r.height*d));ctx.setTransform(d,0,0,d,0,0);draw()}addEventListener('resize',resize);
 function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]]}}for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wlr=Math.cos(ang),wli=Math.sin(ang);for(let i=0;i<n;i+=len){let wr=1,wi=0;for(let j=0;j<len/2;j++){const uR=re[i+j],uI=im[i+j],k=i+j+len/2,vR=re[k]*wr-im[k]*wi,vI=re[k]*wi+im[k]*wr;re[i+j]=uR+vR;im[i+j]=uI+vI;re[k]=uR-vR;im[k]=uI-vI;const nr=wr*wlr-wi*wli;wi=wr*wli+wi*wlr;wr=nr}}}}const hann=(n,N)=>.5-.5*Math.cos(2*Math.PI*n/(N-1));
 async function loadArrayBuffer(ab,name,type=""){
@@ -505,6 +751,36 @@ holder.addEventListener('dragleave',e=>{e.preventDefault();$('drop').classList.r
 holder.addEventListener('drop',e=>{e.preventDefault();$('drop').classList.remove('show');const f=e.dataTransfer.files[0];if(f)loadFile(f)});
 
 
+
+let loopRefreshTimer=0;
+let loopRefreshSerial=0;
+
+function scheduleLoopRefresh(delay=70){
+  if(!loopEnabled)return;
+  clearTimeout(loopRefreshTimer);
+  const serial=++loopRefreshSerial;
+
+  loopRefreshTimer=setTimeout(async()=>{
+    if(!loopEnabled||serial!==loopRefreshSerial)return;
+    try{
+      if(!selected.size){
+        await playSynth(null,0,null,'partials');
+      }else if(lastSelectionPlaybackMode==='muted'){
+        const excluded=new Set([...selected].filter(id=>!deleted.has(id)));
+        if(excluded.size){
+          await playSynth(null,0,excluded,'muted');
+        }else{
+          await playSynth(null,0,null,'partials');
+        }
+      }else{
+        await playSelectedPartials();
+      }
+    }catch(e){
+      console.error('Loop refresh failed',e);
+    }
+  },delay);
+}
+
 function sameIdSet(a,b){
   if(a.size!==b.size)return false;
   for(const x of a)if(!b.has(x))return false;
@@ -534,6 +810,7 @@ function setSelectionWithUndo(next,label='Selection'){
   selected=nextSet;
   updateInfo();
   draw();
+  scheduleLoopRefresh();
   return true;
 }
 function undoLastAction(){
@@ -545,6 +822,7 @@ function undoLastAction(){
   stopAll();
   item.fn();
   status.textContent=`undo · ${item.label}`;
+  scheduleLoopRefresh();
 }
 function nextTrackId(){
   let m=0;
@@ -1189,6 +1467,7 @@ function finishDrawPartial(){
 
   status.textContent=`spectral shape created · ${branchText} · Play selected to hear it`;
   draw();
+  scheduleLoopRefresh();
 }
 
 plot.addEventListener('mousedown',e=>{
@@ -1300,6 +1579,7 @@ addEventListener('mouseup',()=>{
 
   if(finishedMode==='move'&&dragMoved){
     status.textContent=`edit complete · ${selected.size} partial${selected.size===1?'':'s'} selected · Ctrl+Z to undo`;
+    scheduleLoopRefresh();
   }
 
   setTimeout(()=>dragMoved=false,0);
@@ -1680,6 +1960,7 @@ async function importImageOutline(file){
     if(!count)throw new Error('No usable outline could be extracted from this image.');
 
     status.textContent=`imported image outline · ${count} partial branches · threshold ${outline.threshold.toFixed(0)}`;
+    scheduleLoopRefresh();
   }catch(err){
     console.error(err);
     alert(`Could not import this image outline.\n\n${err.message}`);
@@ -1735,6 +2016,7 @@ $('invertBtn').onclick=()=>{
 
 $('soloBtn').onclick=async()=>{
   if(!selected.size)return alert('Select one or more partials first.');
+  lastSelectionPlaybackMode='selected';
   await playSelectedPartials();
 };
 
@@ -1742,6 +2024,7 @@ $('muteBtn').onclick=async()=>{
   if(!selected.size)return alert('Select one or more partials first.');
   const excluded=new Set([...selected].filter(id=>!deleted.has(id)));
   if(!excluded.size)return alert('The selected partials were deleted.');
+  lastSelectionPlaybackMode='muted';
   await playSynth(null,null,excluded,'muted');
 };
 
@@ -1758,6 +2041,7 @@ $('deleteBtn').onclick=()=>{
   selected.clear();
   updateInfo();
   draw();
+  scheduleLoopRefresh();
 };
 
 $('restoreBtn').onclick=()=>{
@@ -1773,6 +2057,7 @@ $('restoreBtn').onclick=()=>{
   deleted.clear();muted.clear();solo.clear();
   updateInfo();
   draw();
+  scheduleLoopRefresh();
 };
 
 function selectRank(kind){
@@ -1799,7 +2084,12 @@ function playbackStart(){
 }
 function currentPlayTime(){
   if(!playingKind)return +progress.value;
-  return Math.min(duration,playStartSec+(ac().currentTime-playStartCtx));
+  const raw=playStartSec+(ac().currentTime-playStartCtx);
+  if(loopEnabled&&loopEndSec>loopStartSec){
+    const len=loopEndSec-loopStartSec;
+    return loopStartSec+(((raw-loopStartSec)%len)+len)%len;
+  }
+  return Math.min(duration,raw);
 }
 function resetTransportToStart(){
   progress.value='0';
@@ -1812,7 +2102,7 @@ function animate(){
   clock.textContent=`${fmt(t)} / ${fmt(duration)}`;
   draw();
 
-  if(t>=duration-.01){
+  if(!loopEnabled&&t>=duration-.01){
     stopAll();
     resetTransportToStart();
     draw();
@@ -1828,7 +2118,16 @@ async function playOriginal(){
   const start=playbackStart();
   srcNode=ac().createBufferSource();
   srcNode.buffer=buffer;
-  srcNode.connect(ac().destination);
+  srcNode.connect(audioOut());
+
+  loopStartSec=0;
+  loopEndSec=duration;
+  if(loopEnabled){
+    srcNode.loop=true;
+    srcNode.loopStart=0;
+    srcNode.loopEnd=Math.max(.001,duration);
+  }
+
   srcNode.start(0,start);
 
   playingKind='original';
@@ -1851,9 +2150,10 @@ function trackPointIndexAtOrBefore(points,t){
   return lo;
 }
 
-async function renderPartialBuffer(trackList,start,renderEveryTrack=false){
+async function renderPartialBuffer(trackList,start,renderEveryTrack=false,endTime=duration){
   const sr=sampleRate;
-  const outLen=Math.max(1,Math.ceil((duration-start)*sr));
+  const renderEnd=Math.max(start+1/sr,Math.min(duration,endTime));
+  const outLen=Math.max(1,Math.ceil((renderEnd-start)*sr));
   const mix=new Float32Array(outLen);
 
   // Short sounds can afford more tracks. Longer sounds are bounded so
@@ -1888,7 +2188,7 @@ async function renderPartialBuffer(trackList,start,renderEveryTrack=false){
     for(let si=firstSeg;si<pts.length-1;si++){
       const a=pts[si],b=pts[si+1];
       const segStart=Math.max(start,a.t);
-      const segEnd=Math.min(duration,b.t);
+      const segEnd=Math.min(renderEnd,b.t);
       if(segEnd<=segStart)continue;
 
       const i0=Math.max(0,Math.floor((segStart-start)*sr));
@@ -1964,6 +2264,27 @@ async function renderPartialBuffer(trackList,start,renderEveryTrack=false){
   return {buffer:out,count:use.length,gain};
 }
 
+function softenLoopEdges(buf,seconds=.010){
+  if(!buf||buf.length<4)return;
+  const n=Math.min(
+    Math.floor(seconds*buf.sampleRate),
+    Math.floor(buf.length*.18)
+  );
+  if(n<2)return;
+
+  for(let ch=0;ch<buf.numberOfChannels;ch++){
+    const a=buf.getChannelData(ch);
+    for(let i=0;i<n;i++){
+      const u=i/(n-1);
+      // Equal-power-ish short ramps reduce the click/buzz at the wrap point.
+      const fadeIn=Math.sin(u*Math.PI*.5);
+      const fadeOut=Math.cos(u*Math.PI*.5);
+      a[i]*=fadeIn;
+      a[a.length-1-i]*=fadeOut;
+    }
+  }
+}
+
 async function playSynth(includeIds=null,startOverride=null,excludeIds=null,mode='partials'){
   if(!tracks.length)return alert('No partial analysis is available yet.');
 
@@ -1987,7 +2308,12 @@ async function playSynth(includeIds=null,startOverride=null,excludeIds=null,mode
   if(mode==='muted')emptyMessage='Muting the selected partials leaves nothing to play.';
   if(!candidates.length)return alert(emptyMessage);
 
-  const rendered=await renderPartialBuffer(candidates,start);
+  // Render exactly as the corresponding non-loop command would.
+  // Looping is applied only to the resulting AudioBufferSourceNode.
+  // This guarantees that "Loop selected" has the same timbre as "Play selected".
+  const effectiveStart=start;
+  const effectiveEnd=duration;
+  const rendered=await renderPartialBuffer(candidates,effectiveStart,false,effectiveEnd);
   const c=ac();
 
   srcNode=c.createBufferSource();
@@ -2003,20 +2329,31 @@ async function playSynth(includeIds=null,startOverride=null,excludeIds=null,mode
   limiter.release.value=.08;
 
   srcNode.connect(limiter);
-  limiter.connect(c.destination);
+  limiter.connect(audioOut());
   synthNodes.push(limiter);
+
+  loopStartSec=loopEnabled?effectiveStart:0;
+  loopEndSec=loopEnabled?duration:duration;
+
+  if(loopEnabled){
+    srcNode.loop=true;
+    srcNode.loopStart=0;
+    srcNode.loopEnd=Math.max(.001,rendered.buffer.duration);
+  }
+
   srcNode.start();
 
   playingKind=mode;
   playStartCtx=c.currentTime;
-  playStartSec=start;
+  playStartSec=effectiveStart;
+  progress.value=String(effectiveStart);
 
   if(mode==='selected'){
-    status.textContent=`playing ${includeIds.size} selected partial${includeIds.size===1?'':'s'} · phase-aware`;
+    status.textContent=`${loopEnabled?'looping':'playing'} ${includeIds.size} selected partial${includeIds.size===1?'':'s'} · phase-aware`;
   }else if(mode==='muted'){
-    status.textContent=`playing partials with ${excludeIds.size} selected muted · phase-aware`;
+    status.textContent=`${loopEnabled?'looping':'playing'} partials with ${excludeIds.size} selected muted · phase-aware`;
   }else{
-    status.textContent=`playing ${rendered.count} partials · phase-aware · gain ${rendered.gain.toFixed(2)}×`;
+    status.textContent=`${loopEnabled?'looping':'playing'} ${rendered.count} partials · phase-aware · gain ${rendered.gain.toFixed(2)}×`;
   }
 
   animate();
@@ -2111,8 +2448,46 @@ function stopAll(){
   playingKind=null;
   draw();
 }
+function updateLoopButton(){
+  $('loopBtn').classList.toggle('active',loopEnabled);
+  $('loopBtn').textContent='↻ Loop';
+}
+$('loopBtn').onclick=async()=>{
+  loopEnabled=!loopEnabled;
+  updateLoopButton();
+
+  if(!loopEnabled){
+    clearTimeout(loopRefreshTimer);
+    loopRefreshSerial++;
+    stopAll();
+    resetTransportToStart();
+    status.textContent='loop off';
+    return;
+  }
+
+  // Loop uses the same playback command the user would use manually:
+  //   no selection -> Partials
+  //   selection + last mode Play selected -> Play selected
+  //   selection + last mode Mute selected -> Mute selected
+  if(!selected.size){
+    await playSynth(null,0,null,'partials');
+  }else if(lastSelectionPlaybackMode==='muted'){
+    const excluded=new Set([...selected].filter(id=>!deleted.has(id)));
+    if(excluded.size){
+      await playSynth(null,0,excluded,'muted');
+    }else{
+      await playSynth(null,0,null,'partials');
+    }
+  }else{
+    await playSelectedPartials();
+  }
+};
+
 $('origBtn').onclick=playOriginal;
-$('synthBtn').onclick=()=>playSynth(null,null,null,'partials');
+$('synthBtn').onclick=()=>{
+  // Explicit Partials means the complete editable partial reconstruction.
+  playSynth(null,null,null,'partials');
+};
 $('stopBtn').onclick=stopAll;
 progress.oninput=()=>{
   if(playingKind)stopAll();
@@ -2142,7 +2517,10 @@ addEventListener('keydown',e=>{
   }
 });
 
-resize();clock.textContent=`${fmt(0)} / ${fmt(0)}`;
+resize();
+updateLoopButton();
+if(!scopeRAF)scopeRAF=requestAnimationFrame(drawScope);
+clock.textContent=`${fmt(0)} / ${fmt(0)}`;
 setTimeout(()=>loadSelectedExample(),60);
 })();
 </script>
